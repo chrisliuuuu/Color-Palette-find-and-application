@@ -10,6 +10,7 @@ from typing import List, Tuple, Dict
 import logging
 import argparse
 import pathlib
+from util import PriorityQueue as PQ
 
 #################
 #     Types     #
@@ -20,33 +21,38 @@ hueValue: float
 #   Constants    #
 ##################
 
+# numbers of colours to use to create palette for the image.
+COLOR_PALETTE_SIZE = 6
 """
 Each of these constant define the ranges for various HSV classifications.
 Example HUE_RANGE_SIZE = 10 will lead to divisions in increments of 10. (0, 10), (11,20) .... (351, 360)
 Increase counter to create more colours and reduce counters to create lesser counters.
 """
-HUE_RANGE_SIZE = 72
-SAT_RANGE_SIZE = 72
-VAL_RANGE_SIZE = 72
+HUE_RANGE_SIZE = 10
+SAT_RANGE_SIZE = 10
+VAL_RANGE_SIZE = 10
 
 
 @dataclass
-class HueData:
+class HSVData:
     """Class for keeping track of data related to a particular Hue"""
-    confidence: float
+    hue: float
     saturation: float
     brightness: float
-    sample: int = 0
 
-    def recalculate_average(self, saturation: float, brightness: float) -> None:
-        self.saturation = (self.sample * self.saturation + saturation) / (self.sample + 1)
-        self.brightness = (self.sample * self.brightness + brightness) / (self.sample + 1)
-        self.sample += 1
+    def buildColor(self, hue: float, sat: float, val: float) -> None:
+        self.hue = hue
+        self.saturation = sat
+        self.brightness = val
 
-    def recalculate_confidence(self, total_pixels: int, frequency_in_new_image: int,
-                               resolution_of_new_image: int) -> None:
-        self.confidence = ((self.confidence / 100 * total_pixels + frequency_in_new_image) /
-                           (total_pixels + resolution_of_new_image)) * 100
+    # def recalculate_average(self, saturation: float, brightness: float) -> None:
+    #     self.saturation = (self.sample * self.saturation + saturation) / (self.sample + 1)
+    #     self.brightness = (self.sample * self.brightness + brightness) / (self.sample + 1)
+
+    # def recalculate_confidence(self, total_pixels: int, frequency_in_new_image: int,
+    #                            resolution_of_new_image: int) -> None:
+    #     self.confidence = ((self.confidence / 100 * total_pixels + frequency_in_new_image) /
+    #                        (total_pixels + resolution_of_new_image)) * 100
 
 
 @dataclass
@@ -61,23 +67,29 @@ class Node:
         self.end = end
         self.frequency = 0
         self.next = nxt
+        self.HSVData = None
 
     def contains(self, value: float) -> bool:
         return self.start <= value <= self.end
 
-    def record_sample(self) -> None:
+    def record_sample(self, sample) -> None:
+        if not self.HSVData:
+            self.HSVData = HSVData(*sample)
+
         self.frequency += 1
 
 
 class HSVTree:
     tree: List[Node]
+    heap: PQ
 
     def __init__(self):
         self.tree = []
+        self.heap = PQ()
         self.create_tree()
 
     def create_tree(self) -> None:
-
+        logging.info("[CREATING COLOUR TREE]")
         for i in range(360 // HUE_RANGE_SIZE):
             if i == 0:
                 s1 = 0
@@ -125,7 +137,12 @@ class HSVTree:
 
                 for val_node in sat_node.next:
                     if val_node.contains(val):
-                        val_node.record_sample()
+                        # TODO: Make this converge to a value based on sample distribution
+                        val_node.record_sample(
+                            (hue_node.start + (hue_node.end - hue_node.start) / 2,
+                             sat_node.start + (sat_node.end - sat_node.start) / 2,
+                             val_node.start + (val_node.end - val_node.start) / 2))
+                        self.heap.update(val_node.HSVData, -val_node.frequency)
 
 
 class Train:
@@ -151,8 +168,6 @@ class Train:
         logging.info("[STARTING TRAINING]")
         start_time = time.perf_counter()
 
-        total_pixels = 0
-
         for filename in os.listdir(self.training_file):
             if not filename.endswith(".jpg"):
                 continue
@@ -162,56 +177,23 @@ class Train:
             hsv_image = image.convert("HSV")
             data = np.array(hsv_image)
 
-            hue_frequency = {}
             for i, line in enumerate(data):
                 # skip every other line for performance
-                if i % 2 == 1:
+                if i % 3 != 0:
                     continue
 
-                for pix in line:
+                for j, pix in enumerate(line):
+                    if j % 3 != 0:
+                        continue
                     self.dataPoints.add_sample(pix[0], pix[1], pix[2])
 
-            logging.info("[TRAINED]")
-            print(self.dataPoints.tree)
+        end_time = time.perf_counter()
+        logging.info("[DONE TRAINING]")
+        logging.info(f"[TRAINING DONE IN]: {end_time - start_time} seconds")
+        logging.info("GENERATING COLOUR PALETTE")
 
-        #             hsv_data = HueData(0, 0, 0)
-        #
-        #             if not pix[0] in self.dataPoint.keys():
-        #                 hsv_data.sample = 1
-        #                 hsv_data.saturation = pix[1]
-        #                 hsv_data.brightness = pix[2]
-        #                 self.dataPoint[pix[0]] = hsv_data
-        #
-        #             else:
-        #                 self.dataPoint[pix[0]].recalculate_average(pix[1], pix[2])
-        #
-        #             if pix[0] in hue_frequency:
-        #                 hue_frequency[pix[0]] += 1
-        #
-        #             else:
-        #                 hue_frequency[pix[0]] = 1
-        #
-        #     x, y, z = data.shape
-        #     resolution = (x * y) / 2
-        #
-        #     for key, value in self.dataPoint.items():
-        #         if key not in hue_frequency:
-        #             continue
-        #         value.recalculate_confidence(total_pixels, hue_frequency[key], resolution)
-        #
-        #     total_pixels += resolution
-        #
-        #     logging.info(f"Finished training with {filename}")
-        #
-        # # update the confidnence
-        #
-        # self.dataPoint = dict(filter(lambda x: x[1].confidence > self.confidence_level, self.dataPoint.items()))
-        # end_time = time.perf_counter()
-        # logging.info("[DONE TRAINING]")
-        # logging.info(f"[TRAINING DONE IN]: {end_time - start_time} seconds")
-        #
-        # print("TRAINED DATA")
-        # print(self.dataPoint)
+        for i in range(COLOR_PALETTE_SIZE):
+            print(f"{i + 1} : {self.dataPoints.heap.pop()}")
 
 
 if __name__ == "__main__":
