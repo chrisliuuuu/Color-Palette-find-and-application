@@ -22,6 +22,10 @@ hueValue: float
 #   Constants    #
 ##################
 
+HUE_SCALE_MAX_VALUE = 360
+SAT_SCALE_MAX_VALUE = 255
+VAL_SCALE_MAX_VALUE = 255
+
 # numbers of colours to use to create palette for the image.
 COLOR_PALETTE_SIZE = 6
 """
@@ -94,7 +98,8 @@ class HSVTree:
 
     def create_tree(self) -> None:
         logging.info("[CREATING COLOUR TREE]")
-        for i in range(360 // HUE_RANGE_SIZE):
+
+        for i in range(HUE_SCALE_MAX_VALUE // HUE_RANGE_SIZE):
             if i == 0:
                 s1 = 0
             else:
@@ -102,7 +107,7 @@ class HSVTree:
             e1 = (i + 1) * HUE_RANGE_SIZE
 
             sat_list = []
-            for j in range(math.ceil(255 / SAT_RANGE_SIZE)):
+            for j in range(math.ceil(SAT_SCALE_MAX_VALUE / SAT_RANGE_SIZE)):
                 if j == 0:
                     s2 = 0
                 else:
@@ -110,7 +115,7 @@ class HSVTree:
                 e2 = (j + 1) * SAT_RANGE_SIZE
 
                 value_list = []
-                for k in range(math.ceil(255 / VAL_RANGE_SIZE)):
+                for k in range(math.ceil(VAL_SCALE_MAX_VALUE / VAL_RANGE_SIZE)):
                     if k == 0:
                         s3 = 0
                     else:
@@ -131,6 +136,7 @@ class HSVTree:
         :param val: Brightness value
         :return: None
         """
+
         for hue_node in self.tree:
             if not hue_node.contains(hue):
                 continue
@@ -141,6 +147,7 @@ class HSVTree:
 
                 for val_node in sat_node.next:
                     if val_node.contains(val):
+                        print(f"Long Method: {val_node}")
                         # TODO: Make this converge to a value based on sample distribution
                         val_node.record_sample(
                             (hue_node.start + (hue_node.end - hue_node.start) / 2,
