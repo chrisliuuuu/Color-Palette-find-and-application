@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import math
 import time
 from dataclasses import dataclass
 import sys
@@ -21,6 +22,10 @@ hueValue: float
 ##################
 #   Constants    #
 ##################
+
+HUE_SCALE_MAX_VALUE = 360
+SAT_SCALE_MAX_VALUE = 255
+VAL_SCALE_MAX_VALUE = 255
 
 # numbers of colours to use to create palette for the image.
 COLOR_PALETTE_SIZE = 7
@@ -45,6 +50,9 @@ class HSVData:
         self.hue = hue
         self.saturation = sat
         self.brightness = val
+
+    def getNormalizedPercentages(self) -> str:
+        return f"Hue: {self.hue}, Sat: {self.saturation / 255 * 100}%, Brightness: {self.brightness / 255 * 100}%"
 
     # def recalculate_average(self, saturation: float, brightness: float) -> None:
     #     self.saturation = (self.sample * self.saturation + saturation) / (self.sample + 1)
@@ -107,7 +115,8 @@ class HSVTree:
 
     def create_tree(self) -> None:
         logging.info("[CREATING COLOUR TREE]")
-        for i in range(360 // HUE_RANGE_SIZE):
+
+        for i in range(HUE_SCALE_MAX_VALUE // HUE_RANGE_SIZE):
             if i == 0:
                 s1 = 0
             else:
@@ -116,7 +125,7 @@ class HSVTree:
             
 
             sat_list = []
-            for j in range(360 // SAT_RANGE_SIZE):
+            for j in range(math.ceil(SAT_SCALE_MAX_VALUE / SAT_RANGE_SIZE)):
                 if j == 0:
                     s2 = 0
                 else:
@@ -124,7 +133,7 @@ class HSVTree:
                 e2 = (j + 1) * SAT_RANGE_SIZE
 
                 value_list = []
-                for k in range(360 // VAL_RANGE_SIZE):
+                for k in range(math.ceil(VAL_SCALE_MAX_VALUE / VAL_RANGE_SIZE)):
                     if k == 0:
                         s3 = 0
                     else:
@@ -148,6 +157,7 @@ class HSVTree:
         :param val: Brightness value
         :return: None
         """
+
         for hue_node in self.tree:
             if not hue_node.contains(hue):
                 continue
@@ -158,6 +168,7 @@ class HSVTree:
 
                 for val_node in sat_node.next:
                     if val_node.contains(val):
+                        print(f"Long Method: {val_node}")
                         # TODO: Make this converge to a value based on sample distribution
                         colorKey = str((hue_node.start, sat_node.start, val_node.start))
                         # print(self.rolling.keys())
@@ -240,6 +251,7 @@ class Train:
                 for j, pix in enumerate(line):
                     if j % 3 != 0:
                         continue
+
                     self.dataPoints.add_sample(pix[0], pix[1], pix[2])
 
         end_time = time.perf_counter()
@@ -250,7 +262,9 @@ class Train:
         self.dataPoints.updateHeap(size)
 
         for i in range(COLOR_PALETTE_SIZE):
-            print(f"{i + 1} : {self.dataPoints.rolling[self.dataPoints.heap.pop()]}")
+            if self.dataPoints.heap.isEmpty():
+                break
+            print(f"{i + 1} : {self.dataPoints.heap.pop().getNormalizedPercentages()}")
 
 
 if __name__ == "__main__":
