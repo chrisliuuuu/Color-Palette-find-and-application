@@ -168,7 +168,7 @@ class HSVTree:
 
                 for val_node in sat_node.next:
                     if val_node.contains(val):
-                        print(f"Long Method: {val_node}")
+                        # print(f"Long Method: {val_node}")
                         # TODO: Make this converge to a value based on sample distribution
                         colorKey = str((hue_node.start, sat_node.start, val_node.start))
                         # print(self.rolling.keys())
@@ -264,7 +264,8 @@ class Train:
         for i in range(COLOR_PALETTE_SIZE):
             if self.dataPoints.heap.isEmpty():
                 break
-            print(f"{i + 1} : {self.dataPoints.heap.pop().getNormalizedPercentages()}")
+            print(
+                f"{i + 1} : {self.dataPoints.rolling[self.dataPoints.heap.pop()]}")
 
 
 if __name__ == "__main__":
