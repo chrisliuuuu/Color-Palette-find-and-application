@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import math
 import time
 from dataclasses import dataclass
 import sys
@@ -44,6 +45,9 @@ class HSVData:
         self.hue = hue
         self.saturation = sat
         self.brightness = val
+
+    def getNormalizedPercentages(self) -> str:
+        return f"Hue: {self.hue}, Sat: {self.saturation / 255 * 100}%, Brightness: {self.brightness / 255 * 100}%"
 
     # def recalculate_average(self, saturation: float, brightness: float) -> None:
     #     self.saturation = (self.sample * self.saturation + saturation) / (self.sample + 1)
@@ -98,7 +102,7 @@ class HSVTree:
             e1 = (i + 1) * HUE_RANGE_SIZE
 
             sat_list = []
-            for j in range(360 // SAT_RANGE_SIZE):
+            for j in range(math.ceil(255 / SAT_RANGE_SIZE)):
                 if j == 0:
                     s2 = 0
                 else:
@@ -106,7 +110,7 @@ class HSVTree:
                 e2 = (j + 1) * SAT_RANGE_SIZE
 
                 value_list = []
-                for k in range(360 // VAL_RANGE_SIZE):
+                for k in range(math.ceil(255 / VAL_RANGE_SIZE)):
                     if k == 0:
                         s3 = 0
                     else:
@@ -185,6 +189,7 @@ class Train:
                 for j, pix in enumerate(line):
                     if j % 3 != 0:
                         continue
+
                     self.dataPoints.add_sample(pix[0], pix[1], pix[2])
 
         end_time = time.perf_counter()
@@ -193,7 +198,9 @@ class Train:
         logging.info("GENERATING COLOUR PALETTE")
 
         for i in range(COLOR_PALETTE_SIZE):
-            print(f"{i + 1} : {self.dataPoints.heap.pop()}")
+            if self.dataPoints.heap.isEmpty():
+                break
+            print(f"{i + 1} : {self.dataPoints.heap.pop().getNormalizedPercentages()}")
 
 
 if __name__ == "__main__":
