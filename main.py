@@ -2,6 +2,7 @@
 import time
 from dataclasses import dataclass
 import sys
+from xmlrpc.client import boolean
 
 from PIL import Image
 import numpy as np
@@ -22,15 +23,15 @@ hueValue: float
 ##################
 
 # numbers of colours to use to create palette for the image.
-COLOR_PALETTE_SIZE = 6
+COLOR_PALETTE_SIZE = 7
 """
 Each of these constant define the ranges for various HSV classifications.
 Example HUE_RANGE_SIZE = 10 will lead to divisions in increments of 10. (0, 10), (11,20) .... (351, 360)
 Increase counter to create more colours and reduce counters to create lesser counters.
 """
 HUE_RANGE_SIZE = 10
-SAT_RANGE_SIZE = 10
-VAL_RANGE_SIZE = 10
+SAT_RANGE_SIZE = 25
+VAL_RANGE_SIZE = 25
 
 
 @dataclass
@@ -60,21 +61,34 @@ class Node:
     start: int
     end: int
     next: List
+    sAverage: float
+    vAverage: float
     frequency: int
+    endNode: boolean
 
-    def __init__(self, start, end, nxt=None):
+    def __init__(self, start, end, nxt=None, ending = False ):
         self.start = start
         self.end = end
         self.frequency = 0
         self.next = nxt
         self.HSVData = None
+        self.sAverage = None
+        self.vAverage = None
+        self.endNode = ending
 
     def contains(self, value: float) -> bool:
-        return self.start <= value <= self.end
+        return self.start <= value < self.end
 
-    def record_sample(self, sample) -> None:
-        if not self.HSVData:
-            self.HSVData = HSVData(*sample)
+    # for value node specifically
+    def record_sample(self, hueKey, hue, satKey, sat, valKey, val) -> None:
+        # first sample
+        if self.sAverage == None and self.vAverage == None:
+            self.sAverage = satKey
+            self.vAverage = valKey
+
+
+        #if not self.HSVData:
+        #    self.HSVData = HSVData(*sample)
 
         self.frequency += 1
 
@@ -82,11 +96,14 @@ class Node:
 class HSVTree:
     tree: List[Node]
     heap: PQ
+    rolling: dict
 
     def __init__(self):
+        self.rolling = {}
         self.tree = []
         self.heap = PQ()
         self.create_tree()
+
 
     def create_tree(self) -> None:
         logging.info("[CREATING COLOUR TREE]")
@@ -94,15 +111,16 @@ class HSVTree:
             if i == 0:
                 s1 = 0
             else:
-                s1 = (i * HUE_RANGE_SIZE) + 1
+                s1 = (i * HUE_RANGE_SIZE)
             e1 = (i + 1) * HUE_RANGE_SIZE
+            
 
             sat_list = []
             for j in range(360 // SAT_RANGE_SIZE):
                 if j == 0:
                     s2 = 0
                 else:
-                    s2 = (j * SAT_RANGE_SIZE) + 1
+                    s2 = (j * SAT_RANGE_SIZE)
                 e2 = (j + 1) * SAT_RANGE_SIZE
 
                 value_list = []
@@ -110,14 +128,17 @@ class HSVTree:
                     if k == 0:
                         s3 = 0
                     else:
-                        s3 = (k * VAL_RANGE_SIZE) + 1
+                        s3 = (k * VAL_RANGE_SIZE)
                     e3 = (k + 1) * VAL_RANGE_SIZE
 
-                    value_list.append(Node(s3, e3))
+                    value_list.append(Node(s3, e3, None, True))
+                    self.rolling[str((s1, s2, s3))] = []
 
                 sat_list.append(Node(s2, e2, value_list))
 
             self.tree.append(Node(s1, e1, sat_list))
+            
+            
 
     def add_sample(self, hue: float, sat: float, val: float) -> None:
         """
@@ -138,12 +159,43 @@ class HSVTree:
                 for val_node in sat_node.next:
                     if val_node.contains(val):
                         # TODO: Make this converge to a value based on sample distribution
+                        colorKey = str((hue_node.start, sat_node.start, val_node.start))
+                        # print(self.rolling.keys())
+                        if (self.rolling[colorKey] == []):
+                            self.rolling[colorKey] = [hue, sat, val, 1]
+                        else:
+                            curHue = float(self.rolling[colorKey][0])
+                            curSat = float(self.rolling[colorKey][1])
+                            curVal = float(self.rolling[colorKey][2])
+                            curFreq = int(self.rolling[colorKey][3])
+
+                            self.rolling[colorKey][0] = (
+                                curHue * curFreq + hue) / (curFreq + 1)
+                            self.rolling[colorKey][1] = (
+                                curSat * curFreq + sat) / (curFreq + 1)
+                            self.rolling[colorKey][2] = (
+                                curVal * curFreq + val) / (curFreq + 1)
+                            self.rolling[colorKey][3] = curFreq + 1
+                            
+                        """
                         val_node.record_sample(
+                            
                             (hue_node.start + (hue_node.end - hue_node.start) / 2,
                              sat_node.start + (sat_node.end - sat_node.start) / 2,
-                             val_node.start + (val_node.end - val_node.start) / 2))
-                        self.heap.update(val_node.HSVData, -val_node.frequency)
+                             val_node.start + (val_node.end - val_node.start) / 2)
+                             
+                            hue_node.start, hue, sat_node.start, sat, val_node.start, val)
+                         self.heap.update(val_node.HSVData, -val_node.frequency)
+                        """
 
+    def updateHeap(self, resolution) :
+        for key, value in self.rolling.items():
+            if value != []:
+                self.rolling[key][0] = int(self.rolling[key][0])
+                self.rolling[key][1] = int(self.rolling[key][1] / 255 * 100)
+                self.rolling[key][2] = int(self.rolling[key][2] / 255 * 100)
+                self.heap.update(key, - value[3])
+                self.rolling[key][3] = float(self.rolling[key][3] / resolution * 900)
 
 class Train:
     temperature: float
@@ -168,6 +220,7 @@ class Train:
         logging.info("[STARTING TRAINING]")
         start_time = time.perf_counter()
 
+        size = 0
         for filename in os.listdir(self.training_file):
             if not filename.endswith(".jpg"):
                 continue
@@ -176,6 +229,8 @@ class Train:
             image = Image.open(f"{self.training_file}/{filename}")
             hsv_image = image.convert("HSV")
             data = np.array(hsv_image)
+            w, h, z = data.shape
+            size = w*h
 
             for i, line in enumerate(data):
                 # skip every other line for performance
@@ -192,8 +247,10 @@ class Train:
         logging.info(f"[TRAINING DONE IN]: {end_time - start_time} seconds")
         logging.info("GENERATING COLOUR PALETTE")
 
+        self.dataPoints.updateHeap(size)
+
         for i in range(COLOR_PALETTE_SIZE):
-            print(f"{i + 1} : {self.dataPoints.heap.pop()}")
+            print(f"{i + 1} : {self.dataPoints.rolling[self.dataPoints.heap.pop()]}")
 
 
 if __name__ == "__main__":
