@@ -34,9 +34,9 @@ Each of these constant define the ranges for various HSV classifications.
 Example HUE_RANGE_SIZE = 10 will lead to divisions in increments of 10. (0, 10), (11,20) .... (351, 360)
 Increase counter to create more colours and reduce counters to create lesser counters.
 """
-HUE_RANGE_SIZE = 10
+HUE_RANGE_SIZE = 60
 SAT_RANGE_SIZE = 25
-VAL_RANGE_SIZE = 25
+VAL_RANGE_SIZE = 50
 
 
 @dataclass
@@ -202,8 +202,12 @@ class HSVTree:
                 self.rolling[key][0] = int(self.rolling[key][0] / 255 * 360)
                 self.rolling[key][1] = int(self.rolling[key][1] / 255 * 100)
                 self.rolling[key][2] = int(self.rolling[key][2] / 255 * 100)
-                self.heap.update(key, - value[3])
                 self.rolling[key][3] = float(self.rolling[key][3] / resolution * 900)
+                # filter out nearly white/black color
+                if (self.rolling[key][1] <= 5):
+                    if (self.rolling[key][2] <= 5 or self.rolling[key][2] >= 5):
+                        self.rolling[key][3] = 0.0
+                self.heap.update(key, - value[3])
 
 
 class Train:
