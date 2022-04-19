@@ -14,6 +14,13 @@ import argparse
 import pathlib
 from util import PriorityQueue as PQ
 
+%matplotlib inline
+import cv2
+from scipy.cluster.vq import vq, kmeans
+from matplotlib import pyplot as plt
+import numpy as np
+import time as t
+
 #################
 #     Types     #
 #################
