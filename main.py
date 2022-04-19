@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import colorsys
 import math
 import time
 from dataclasses import dataclass
 import sys
 from xmlrpc.client import boolean
 
+import cv2
 from PIL import Image
 import numpy as np
 import os
@@ -14,12 +16,8 @@ import argparse
 import pathlib
 from util import PriorityQueue as PQ
 
-%matplotlib inline
-import cv2
-from scipy.cluster.vq import vq, kmeans
-from matplotlib import pyplot as plt
-import numpy as np
-import time as t
+from sklearn.cluster import KMeans
+import time
 
 #################
 #     Types     #
@@ -35,15 +33,16 @@ SAT_SCALE_MAX_VALUE = 255
 VAL_SCALE_MAX_VALUE = 255
 
 # numbers of colours to use to create palette for the image.
-COLOR_PALETTE_SIZE = 10
+DATA_SET_SIZE = 50
+COLOUR_PALETTE_SIZE = 5
 """
 Each of these constant define the ranges for various HSV classifications.
 Example HUE_RANGE_SIZE = 10 will lead to divisions in increments of 10. (0, 10), (11,20) .... (351, 360)
 Increase counter to create more colours and reduce counters to create lesser counters.
 """
-HUE_RANGE_SIZE = 60
-SAT_RANGE_SIZE = 25
-VAL_RANGE_SIZE = 50
+HUE_RANGE_SIZE = 10
+SAT_RANGE_SIZE = 30
+VAL_RANGE_SIZE = 30
 
 
 @dataclass
@@ -87,8 +86,8 @@ class Node:
         self.frequency = 0
         self.next = nxt
         self.HSVData = None
-        self.sAverage = None
-        self.vAverage = None
+        self.sAverage = -1
+        self.vAverage = -1
         self.endNode = ending
 
     def contains(self, value: float) -> bool:
@@ -97,12 +96,9 @@ class Node:
     # for value node specifically
     def record_sample(self, hueKey, hue, satKey, sat, valKey, val) -> None:
         # first sample
-        if self.sAverage == None and self.vAverage == None:
+        if self.sAverage == -1 and self.vAverage == -1:
             self.sAverage = satKey
             self.vAverage = valKey
-
-        # if not self.HSVData:
-        #    self.HSVData = HSVData(*sample)
 
         self.frequency += 1
 
@@ -211,8 +207,8 @@ class HSVTree:
                 self.rolling[key][2] = int(self.rolling[key][2] / 255 * 100)
                 self.rolling[key][3] = float(self.rolling[key][3] / resolution * 900)
                 # filter out nearly white/black color
-                if (self.rolling[key][1] <= 5):
-                    if (self.rolling[key][2] <= 5 or self.rolling[key][2] >= 5):
+                if self.rolling[key][1] <= 5:
+                    if self.rolling[key][2] <= 5 or self.rolling[key][2] >= 5:
                         self.rolling[key][3] = 0.0
                 self.heap.update(key, - value[3])
 
@@ -254,11 +250,11 @@ class Train:
 
             for i, line in enumerate(data):
                 # skip every other line for performance
-                if i % 10 != 0:
+                if i % 3 != 0:
                     continue
 
                 for j, pix in enumerate(line):
-                    if j % 10 != 0:
+                    if j % 3 != 0:
                         continue
 
                     self.dataPoints.add_sample(pix[0], pix[1], pix[2])
@@ -266,85 +262,49 @@ class Train:
         end_time = time.perf_counter()
         logging.info("[DONE TRAINING]")
         logging.info(f"[TRAINING DONE IN]: {end_time - start_time} seconds")
-        logging.info("GENERATING COLOUR PALETTE")
 
         self.dataPoints.updateHeap(size)
 
-        for i in range(COLOR_PALETTE_SIZE):
+        data_points = []
+
+        # performing K-Means on the data-set
+        for i in range(DATA_SET_SIZE):
             if self.dataPoints.heap.isEmpty():
                 break
-            print(
-                f"{i + 1} : {self.dataPoints.rolling[self.dataPoints.heap.pop()]}")
-
- 
-# K-means
-def do_cluster2(hsv_array, K):
-    # gets height, width and the number of channes from the image shape
-    h,w,c = hsv_array.shape
-    # prepares data for clustering by reshaping the image matrix into a (h*w) x c matrix of pixels
-    cluster_data = hsv_array.reshape( (h*w,c) )
-    # grabs the initial time
-    t0 = t.time()
-    # performs clustering
-    codebook, distortion = kmeans(np.array(cluster_data, dtype=np.float), K)
-    print(codebook)
-    # takes the final time
-    t1 = t.time()
-    print("Clusterization took %0.5f seconds" % (t1-t0))
-    
-    
-    # calculates the total amount of pixels
-    tot_pixels = h*w
-    # generates clusters
-    data, dist = vq(cluster_data, codebook)
-    # calculates the number of elements for each cluster
-    weights = [len(data[data == i]) for i in range(0,K)]
-    
-    # creates a 4 column matrix in which the first element is the weight and the other three
-    # represent the h, s and v values for each cluster
-    color_rank = np.column_stack((weights, codebook))
-    # sorts by cluster weight
-    color_rank = color_rank[np.argsort(color_rank[:,0])]
-    # print(color_rank)
-
-    # creates a new blank image
-    new_image =  np.array([0,0,255], dtype=np.uint8) * np.ones( (500, 500, 3), dtype=np.uint8)
-    img_height = new_image.shape[0]
-    img_width  = new_image.shape[1]
-
-    # for each cluster
-    color_plt = []
-    for i,c in enumerate(color_rank[::-1]):
-        
-        # gets the weight of the cluster
-        weight = c[0]
-        
-        # calculates the height and width of the bins
-        height = int(weight/float(tot_pixels) *img_height )
-        width = int(img_width/len(color_rank))
-
-        # calculates the position of the bin
-        x_pos = int(i*width)
+            data_points.append(self.dataPoints.rolling[self.dataPoints.heap.pop()][:3])
+        data_array = np.asarray(data_points)
+        colours, _ = data_array.shape
+        kmeans = KMeans(n_clusters=min(colours, COLOUR_PALETTE_SIZE))
+        kmeans.fit(data_array)
+        generate_palette_image(kmeans.cluster_centers_)
 
 
-        
-        # defines a color so that if less than three channels have been used
-        # for clustering, the color has average saturation and luminosity value
-        color = np.array( [0,0,0], dtype=np.uint8)
-        # print(color)
-        
-        # substitutes the known HSV components in the default color
-        for j in range(len(c[1:])):
-            color[j] = c[j+1]
-        # print('===========')
-        color_plt.append(color)
-        
-        # # draws the bin to the image
-        new_image[img_height-height:img_height, x_pos:x_pos+width] = [color[0], color[1], color[2]]
-        
-    # returns the cluster representation
-    return new_image, color_plt
+def generate_palette_image(palette_as_hsv: np.array):
+    """
+    Generates the image of the palette
+    :param palette_as_hsv: np array containing hsv values of colours
+    :return: None
+    """
+    logging.info("[GENERATING PALETTE IMAGE]")
+    palette_img = np.zeros((500, 720, 3), np.uint8)
 
+    hsv_colour_tuples = tuple(map(tuple, palette_as_hsv))
+
+    width = 720 // len(hsv_colour_tuples)
+    for i, hsv_tuple in enumerate(hsv_colour_tuples):
+        # some weird shit I had to do to generate RGB values that work
+        colour = tuple(round(i * 255) for i in
+                       colorsys.hsv_to_rgb(hsv_tuple[0] / 359, hsv_tuple[1] / 100, hsv_tuple[2] / 100))
+
+        top_left = (i * width, 0)
+        bottom_right = ((i + 1) * width, 500)
+
+        # had to reverse RGB cause cv2 accepts BRG for some reason
+        cv2.rectangle(palette_img, top_left, bottom_right, colour[::-1], -1)
+
+    cv2.imwrite("palette.png", palette_img)
+
+    logging.info("[DONE]")
 
 
 if __name__ == "__main__":
