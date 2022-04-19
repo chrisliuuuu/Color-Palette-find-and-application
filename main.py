@@ -313,6 +313,7 @@ def do_cluster2(hsv_array, K):
     img_width  = new_image.shape[1]
 
     # for each cluster
+    color_plt = []
     for i,c in enumerate(color_rank[::-1]):
         
         # gets the weight of the cluster
