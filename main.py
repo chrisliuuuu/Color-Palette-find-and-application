@@ -269,7 +269,8 @@ def generate_palette_image(palette_as_hsv: np.array):
     logging.info("[GENERATING PALETTE IMAGE]")
     palette_img = np.zeros((500, 720, 3), np.uint8)
 
-    hsv_colour_tuples = tuple(map(tuple, palette_as_hsv))
+    hsv_colour_tuples = list(map(tuple, palette_as_hsv))
+    hsv_colour_tuples.sort(key=lambda x: x[0], reverse=True)
 
     width = 720 // len(hsv_colour_tuples)
     for i, hsv_tuple in enumerate(hsv_colour_tuples):
