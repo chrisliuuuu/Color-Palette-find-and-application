@@ -12,6 +12,8 @@ from scipy.spatial.distance import euclidean
 
 
 def get_closest(target_vec, vectors_array):
+    '''return a vector, which is closest to the target vector, from in an array of arrays;
+    Also returns the distance between the two vectors.'''
     min_dist = 100000000000
     closest_vec = None
 
@@ -26,6 +28,8 @@ def get_closest(target_vec, vectors_array):
 
 
 def reward(target_plt, output_plt):
+    '''return the sum of distance between target color pallette and the output color pallette'''
+    ''''Target_plt and output_plt must by a numpy array of arrays, and they must have in the same format'''
     dist_sum = 0
     for target_color in target_plt():
         cloest, min_dist = get_closest(target_color, output_plt)
