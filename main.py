@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import colorsys
 import math
-import time
 from dataclasses import dataclass
 import sys
 from xmlrpc.client import boolean
@@ -60,15 +59,6 @@ class HSVData:
     def getNormalizedPercentages(self) -> str:
         return f"Hue: {self.hue}, Sat: {self.saturation / 255 * 100}%, Brightness: {self.brightness / 255 * 100}%"
 
-    # def recalculate_average(self, saturation: float, brightness: float) -> None:
-    #     self.saturation = (self.sample * self.saturation + saturation) / (self.sample + 1)
-    #     self.brightness = (self.sample * self.brightness + brightness) / (self.sample + 1)
-
-    # def recalculate_confidence(self, total_pixels: int, frequency_in_new_image: int,
-    #                            resolution_of_new_image: int) -> None:
-    #     self.confidence = ((self.confidence / 100 * total_pixels + frequency_in_new_image) /
-    #                        (total_pixels + resolution_of_new_image)) * 100
-
 
 @dataclass
 class Node:
@@ -120,7 +110,7 @@ class HSVTree:
 
         logging.info("[CREATING COLOUR TREE]")
 
-        for i in range(HUE_SCALE_MAX_VALUE // HUE_RANGE_SIZE):
+        for i in range(math.ceil(HUE_SCALE_MAX_VALUE / HUE_RANGE_SIZE)):
             if i == 0:
                 s1 = 0
             else:
@@ -159,45 +149,36 @@ class HSVTree:
         :return: None
         """
 
-        for hue_node in self.tree:
-            if not hue_node.contains(hue):
-                continue
+        # calculate indices of nodes that represent this HSV colour
+        hue_idx = int(hue // HUE_RANGE_SIZE)
+        sat_idx = int(sat // SAT_RANGE_SIZE)
+        val_idx = int(val // VAL_RANGE_SIZE)
 
-            for sat_node in hue_node.next:
-                if not sat_node.contains(sat):
-                    continue
+        # extract nodes
+        hue_node = self.tree[hue_idx]
+        sat_node = hue_node.next[sat_idx]
+        val_node = sat_node.next[val_idx]
 
-                for val_node in sat_node.next:
-                    if val_node.contains(val):
-                        # TODO: Make this converge to a value based on sample distribution
-                        colorKey = str((hue_node.start, sat_node.start, val_node.start))
-                        # print(self.rolling.keys())
-                        if not self.rolling[colorKey]:
-                            self.rolling[colorKey] = [hue, sat, val, 1]
-                        else:
-                            curHue = float(self.rolling[colorKey][0])
-                            curSat = float(self.rolling[colorKey][1])
-                            curVal = float(self.rolling[colorKey][2])
-                            curFreq = int(self.rolling[colorKey][3])
+        # sanity check, may not be necessary
+        if val_node.contains(val):
 
-                            self.rolling[colorKey][0] = (
-                                                                curHue * curFreq + hue) / (curFreq + 1)
-                            self.rolling[colorKey][1] = (
-                                                                curSat * curFreq + sat) / (curFreq + 1)
-                            self.rolling[colorKey][2] = (
-                                                                curVal * curFreq + val) / (curFreq + 1)
-                            self.rolling[colorKey][3] = curFreq + 1
+            # update rolling average of node
+            colorKey = str((hue_node.start, sat_node.start, val_node.start))
+            if not self.rolling[colorKey]:
+                self.rolling[colorKey] = [hue, sat, val, 1]
+            else:
+                curHue = float(self.rolling[colorKey][0])
+                curSat = float(self.rolling[colorKey][1])
+                curVal = float(self.rolling[colorKey][2])
+                curFreq = int(self.rolling[colorKey][3])
 
-                        """
-                        val_node.record_sample(
-                            
-                            (hue_node.start + (hue_node.end - hue_node.start) / 2,
-                             sat_node.start + (sat_node.end - sat_node.start) / 2,
-                             val_node.start + (val_node.end - val_node.start) / 2)
-                             
-                            hue_node.start, hue, sat_node.start, sat, val_node.start, val)
-                         self.heap.update(val_node.HSVData, -val_node.frequency)
-                        """
+                self.rolling[colorKey][0] = (
+                                                    curHue * curFreq + hue) / (curFreq + 1)
+                self.rolling[colorKey][1] = (
+                                                    curSat * curFreq + sat) / (curFreq + 1)
+                self.rolling[colorKey][2] = (
+                                                    curVal * curFreq + val) / (curFreq + 1)
+                self.rolling[colorKey][3] = curFreq + 1
 
     def updateHeap(self, resolution):
         for key, value in self.rolling.items():
@@ -250,11 +231,11 @@ class Train:
 
             for i, line in enumerate(data):
                 # skip every other line for performance
-                if i % 3 != 0:
+                if i % 6 != 0:
                     continue
 
                 for j, pix in enumerate(line):
-                    if j % 3 != 0:
+                    if j % 6 != 0:
                         continue
 
                     self.dataPoints.add_sample(pix[0], pix[1], pix[2])
@@ -288,7 +269,8 @@ def generate_palette_image(palette_as_hsv: np.array):
     logging.info("[GENERATING PALETTE IMAGE]")
     palette_img = np.zeros((500, 720, 3), np.uint8)
 
-    hsv_colour_tuples = tuple(map(tuple, palette_as_hsv))
+    hsv_colour_tuples = list(map(tuple, palette_as_hsv))
+    hsv_colour_tuples.sort(key=lambda x: x[0], reverse=True)
 
     width = 720 // len(hsv_colour_tuples)
     for i, hsv_tuple in enumerate(hsv_colour_tuples):
