@@ -42,10 +42,10 @@ def take_action(image_np, action_idx):
     # enhance contrast
     if action_idx == 0:
         enh = ImageEnhance.Contrast(image_pil)
-        image_enh = enh.enhance(0.9)
+        image_enh = enh.enhance(0.8)
     elif action_idx == 1:
         enh = ImageEnhance.Contrast(image_pil)
-        image_enh = enh.enhance(1.1)
+        image_enh = enh.enhance(1.2)
     # enhance color
     elif action_idx == 2:
         enh = ImageEnhance.Color(image_pil)
@@ -95,34 +95,34 @@ def take_action(image_np, action_idx):
     elif action_idx == 11:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][0] = image_np[a][b][0] * 1.05
+                image_np[a][b][0] = image_np[a][b][0] +5
         image_enh = Image.fromarray(image_np)
     elif action_idx == 12:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][0] = image_np[a][b][0] * 0.95
+                image_np[a][b][0] = image_np[a][b][0] -5
         image_enh = Image.fromarray(image_np)
     # Green
     elif action_idx == 13:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][1] = image_np[a][b][1] * 1.05
+                image_np[a][b][1] = image_np[a][b][1] +5
         image_enh = Image.fromarray(image_np)
     elif action_idx == 14:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][1] = image_np[a][b][1] * 0.95
+                image_np[a][b][1] = image_np[a][b][1] -5
         image_enh = Image.fromarray(image_np.copy())
     # Blue
     elif action_idx == 15:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][2] = image_np[a][b][2] * 1.05
+                image_np[a][b][2] = image_np[a][b][2] +5
         image_enh = Image.fromarray(image_np)
     elif action_idx == 14:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][2] = image_np[a][b][2] * 0.95
+                image_np[a][b][2] = image_np[a][b][2] -5
         image_enh = Image.fromarray(image_np)
     else:
         print("error")
@@ -138,7 +138,7 @@ image1 = Image.open('sample-image/example image 2/20220211-000034050008.jpg')
 
 data = np.array(image1)
 
-image = Image.fromarray(take_action(data, 15))
+image = Image.fromarray(take_action(data, 1))
 
 image1.show()
 image.show()
