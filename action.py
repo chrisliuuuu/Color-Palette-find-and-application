@@ -7,6 +7,7 @@ import sys
 
 import colorsys
 
+import cv2
 from PIL import Image, ImageEnhance
 import numpy as np
 import enum

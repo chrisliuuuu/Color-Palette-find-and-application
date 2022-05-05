@@ -163,7 +163,8 @@ def runEpisode(agent, environment, discount, decision, message, episode):
     environment.reset()
     if 'startEpisode' in dir(agent): agent.startEpisode()
     message("BEGINNING EPISODE: " + str(episode) + "\n")
-    while True:
+    i = 0
+    while i < 5:
 
         # DISPLAY CURRENT STATE
         state = environment.getCurrentState()
@@ -181,9 +182,7 @@ def runEpisode(agent, environment, discount, decision, message, episode):
 
         # EXECUTE ACTION
         nextState, reward = environment.doAction(action)
-        message("Started in state: " + str(state) +
-                "\nTook action: " + str(action) +
-                "\nEnded in state: " + str(nextState) +
+        message("Took action: " + str(action) +
                 "\nGot reward: " + str(reward) + "\n")
         # UPDATE LEARNER
         if 'observeTransition' in dir(agent):
@@ -191,6 +190,11 @@ def runEpisode(agent, environment, discount, decision, message, episode):
 
         returns += reward * totalDiscount
         totalDiscount *= discount
+
+        i += 1
+
+    message("EPISODE " + str(episode) + " COMPLETE: RETURN WAS " + str(returns) + "\n")
+    return returns
 
 
 if __name__ == '__main__':
@@ -277,4 +281,4 @@ if __name__ == '__main__':
         print(f"\nAVERAGE RETURNS FROM START STATE: {str((returns + 0.0) / args.episodes)}\n\n")
 
     print("Iterations over, saving image as edited.jpg")
-    # TODO: save final edited image
+    cv2.imwrite("edited.jpg", env.getCurrentState())
