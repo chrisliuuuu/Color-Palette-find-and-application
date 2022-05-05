@@ -284,23 +284,3 @@ def generate_palette_image(palette_as_hsv: np.array, name):
 
     logging.info("[DONE]")
 
-
-if __name__ == "__main__":
-    p = argparse.ArgumentParser(description="Image Processor")
-    p.add_argument('-f', dest="training_file", type=pathlib.Path, help="Location of directory containing training "
-                                                                       "images", required=True)
-    args = p.parse_args()
-    logging.basicConfig(level=logging.INFO)
-
-    imagePath = pathlib.Path(args.training_file)
-
-    if not imagePath.exists() or imagePath.suffix != ".jpg":
-        print("ERROR: Invalid path or format")
-        sys.exit(1)
-
-    imageObj = Image.open(imagePath)
-
-    logging.info("Beginning training")
-    t = Train(imageObj)
-    cluster_centers = t.train()
-    generate_palette_image(cluster_centers, "palette")
