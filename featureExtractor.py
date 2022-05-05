@@ -277,7 +277,7 @@ def generate_palette_image(palette_as_hsv: np.array, name):
         top_left = (i * width, 0)
         bottom_right = ((i + 1) * width, 500)
 
-        # had to reverse RGB cause cv2 accepts BRG for some reason
+        # had to reverse RGB cause cv2 accepts BGR for some reason
         cv2.rectangle(palette_img, top_left, bottom_right, colour[::-1], -1)
 
     cv2.imwrite(f"{name}.png", palette_img)

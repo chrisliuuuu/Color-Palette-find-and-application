@@ -280,5 +280,9 @@ if __name__ == '__main__':
     if args.episodes > 0:
         print(f"\nAVERAGE RETURNS FROM START STATE: {str((returns + 0.0) / args.episodes)}\n\n")
 
-    print("Iterations over, saving image as edited.jpg")
-    cv2.imwrite("edited.jpg", env.getCurrentState())
+    print("Iterations over, palette image as edited.jpg")
+    imgObj = Image.fromarray(env.getCurrentState(), "RGB")
+    t = featureExtractor.Train(Image.fromarray(env.getCurrentState()))
+    palette = t.train()
+    featureExtractor.generate_palette_image(palette, "edited_palette")
+    imgObj.save("edited_image.jpg")

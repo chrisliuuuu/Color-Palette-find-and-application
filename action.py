@@ -65,7 +65,7 @@ def take_action(image_np, action_type: ActionType) -> np.array:
     15 more blue
     16 less blue
     """
-    image_pil = Image.fromarray(image_np)
+    image_pil = Image.fromarray(image_np, "RGB")
     shape = image_np.shape
     i = shape[0]
     j = shape[1]
