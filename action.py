@@ -5,6 +5,7 @@ Modified by: Krishna Kothandaraman, Haobao Li
 
 import pathlib
 import sys
+import colorsys
 
 from PIL import Image, ImageEnhance
 import numpy as np
@@ -38,6 +39,8 @@ class ActionType(enum.Enum):
     less_green = enum.auto()
     more_blue = enum.auto()
     less_blue = enum.auto()
+    shift_hue_up = enum.auto()
+    shift_hue_down = enum.auto()
 
 
 # TODO: FIND OUT WHY COLOUR CHANGES
@@ -88,11 +91,11 @@ def take_action(image_np, action_type: ActionType) -> np.array:
     # color brightness
     elif action_type == ActionType.lower_brightness:
         enh = ImageEnhance.Brightness(image_pil)
-        image_enh = enh.enhance(0.7)
+        image_enh = enh.enhance(0.9)
 
     elif action_type == ActionType.higher_brightness:
         enh = ImageEnhance.Brightness(image_pil)
-        image_enh = enh.enhance(1.3)
+        image_enh = enh.enhance(1.1)
 
     # color temperature : http://stackoverflow.com/questions/11884544/setting-color-temperature-for-a-given-image
     # -like-in-photoshop
@@ -135,6 +138,8 @@ def take_action(image_np, action_type: ActionType) -> np.array:
     elif action_type == ActionType.more_red:
         for a in range(i):
             for b in range(j):
+                temp = image_np[a][b][0]
+
                 image_np[a][b][0] = image_np[a][b][0] * 1.05
         image_enh = Image.fromarray(image_np)
 
@@ -160,13 +165,37 @@ def take_action(image_np, action_type: ActionType) -> np.array:
     elif action_type == ActionType.more_blue:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][2] = image_np[a][b][2] * 0.95
+                image_np[a][b][2] = image_np[a][b][2] * 1.05
         image_enh = Image.fromarray(image_np)
 
     elif action_type == action_type.less_blue:
         for a in range(i):
             for b in range(j):
-                image_np[a][b][2] = image_np[a][b][2] * 1.05
+                image_np[a][b][2] = image_np[a][b][2] * .95
+                
+        image_enh = Image.fromarray(image_np)
+    
+    elif action_type == action_type.shift_hue_up:
+        for a in range(i):
+            for b in range(j):
+                temp = colorsys.rgb_to_hsv(image_np[a][b])
+                if temp[0] >= 355 :
+                    temp[0] += 5
+                else: temp[0] = 360
+
+                image_np[a][b] = colorsys.hsv_to_rgb(temp)
+        image_enh = Image.fromarray(image_np)
+
+    elif action_type == action_type.shift_hue_down:
+        for a in range(i):
+            for b in range(j):
+                temp = colorsys.rgb_to_hsv(image_np[a][b])
+                if temp[0] <= 5:
+                    temp[0] -= 5
+                else:
+                    temp[0] = 0
+
+                image_np[a][b] = colorsys.hsv_to_rgb(temp)
         image_enh = Image.fromarray(image_np)
 
     else:
