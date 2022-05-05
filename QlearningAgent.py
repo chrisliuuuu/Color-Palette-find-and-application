@@ -13,6 +13,9 @@
 # Modified by: Krishna Kothandaraman
 
 import random
+
+import numpy as np
+
 import util
 
 from learningAgents import ReinforcementAgent
@@ -50,10 +53,13 @@ class QLearningAgent(ReinforcementAgent):
           or the Q node value otherwise
         """
         "*** YOUR CODE HERE ***"
-        if (state, action) not in self.values:
+        # weird trick to make a 3-D numpy array hashable
+        stateTuple = tuple(map(tuple, np.vstack(state.T)))
+
+        if (stateTuple, action) not in self.values:
             return 0.0
 
-        return self.values[(state, action)]
+        return self.values[(stateTuple, action)]
 
     def getBestQValAndAction(self, state):
         actions = self.getLegalActions(state)
@@ -121,7 +127,9 @@ class QLearningAgent(ReinforcementAgent):
           it will be called on your behalf
         """
         "*** YOUR CODE HERE ***"
-        self.values[(state, action)] = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (
+        # weird trick to make a 3-D numpy array hashable
+        stateTuple = tuple(map(tuple, np.vstack(state.T)))
+        self.values[(stateTuple, action)] = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (
                 reward + self.discount * self.computeValueFromQValues(nextState))
 
     def getPolicy(self, state):

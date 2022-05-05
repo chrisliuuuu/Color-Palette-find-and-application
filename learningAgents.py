@@ -10,7 +10,7 @@
 # (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
 # Student side autograding was added by Brad Miller, Nick Hay, and
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
-
+import numpy as np
 
 from game import Agent, Actions
 from action import take_action, ActionType
@@ -138,7 +138,7 @@ class ReinforcementAgent(ValueEstimationAgent):
           state. This is what you should use to
           obtain legal actions for a state
         """
-        return self.actionFn(state)
+        return self.actionFn(np.asarray(state))
 
     def observeTransition(self, state, action, nextState, deltaReward):
         """

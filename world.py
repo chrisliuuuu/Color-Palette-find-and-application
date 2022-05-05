@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Licensing Information:  You are free to use or extend these projects for
 # educational purposes provided that (1) you do not distribute or publish
 # solutions, (2) you retain this notice, and (3) you provide clear
@@ -29,9 +30,8 @@ import QlearningAgent
 TERMINAL_DISTANCE = 100
 
 
-def getPaletteFromImage(image) -> np.array:
-    t = featureExtractor.Train(image)
-    return t.train()
+def getPaletteFromImage(image: np.array) -> np.array:
+    return featureExtractor.Train(Image.fromarray(image)).train()
 
 
 class ImageWorld(mdp.MarkovDecisionProcess):
@@ -39,7 +39,7 @@ class ImageWorld(mdp.MarkovDecisionProcess):
       Image world
     """
 
-    def __init__(self, image: Image, goalPalette):
+    def __init__(self, image: np.array, goalPalette):
         # target image and palette in this world that the agent wants to reach
         self.image = image
         self.goalPalette = goalPalette
@@ -76,7 +76,9 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         that "exit" states transition to the terminal
         state under the special action "done".
         """
-        # TODO: add terminal state
+        # return 0 at terminal state
+        if self.isTerminal(state):
+            return []
         return [nextAction for nextAction in action.ActionType]
 
     def getReward(self, state, action: action.ActionType, nextState: np.array) -> float:
@@ -89,8 +91,8 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         # initialize image object for feature extraction
         nextImage = Image.fromarray(nextState)
         # extract palette of new image
-        nextPalette = getPaletteFromImage(nextImage)
-        # get reward for new palette
+        nextPalette = getPaletteFromImage(np.asarray(nextImage))
+        # get reward for new palette. Negative because we want to actually minimize the euclidean distance
         return -reward.getRewardFromPalettes(self.goalPalette, nextPalette)
 
     def isTerminal(self, nextImage: np.array):
@@ -102,7 +104,9 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         in the R+N textbook.
         """
         # Terminate if Euclidean distance is <= certain amount
-        return reward.getRewardFromPalettes(self.goalPalette, getPaletteFromImage(nextImage)) <= TERMINAL_DISTANCE
+        r = reward.getRewardFromPalettes(self.goalPalette, getPaletteFromImage(nextImage))
+        print(f"Got reward {r}")
+        return r <= TERMINAL_DISTANCE
 
     def getTransitionStatesAndProbs(self, state: np.array, imgAction: action.ActionType):
         """
@@ -220,7 +224,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     goalImagePath = pathlib.Path(args.goal_image)
-    editImagePath = pathlib.Path(args.goal_image)
+    editImagePath = pathlib.Path(args.edit_image)
 
     if not goalImagePath.exists() or goalImagePath.suffix != ".jpg":
         print("ERROR: Invalid goal Image path or format")
@@ -239,7 +243,7 @@ if __name__ == '__main__':
     cluster_centers = t.train()
     logging.info("Extracted features")
 
-    imgWorld = ImageWorld(editImageObj, cluster_centers)
+    imgWorld = ImageWorld(np.asarray(editImageObj), cluster_centers)
     env = WorldEnvironment(imgWorld)
 
     ###########################

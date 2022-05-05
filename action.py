@@ -3,13 +3,9 @@ JongChan Park, DISTORT-AND-RECOVER-CVPR18, (2018), GitHub repository, https://gi
 Modified by: Krishna Kothandaraman, Haobao Li
 """
 
-import pathlib
 import sys
-
 from PIL import Image, ImageEnhance
 import numpy as np
-from featureExtractor import Train, generate_palette_image, HSVTree
-import Reward
 import enum
 
 kelvin_table = [(255, 219, 186),  # 4500
