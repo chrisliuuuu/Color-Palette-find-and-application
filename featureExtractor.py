@@ -195,54 +195,49 @@ class HSVTree:
 
 
 class Train:
-    temperature: float
     training_file: str
     confidence_level: float
     dataPoints: HSVTree
 
-    def __init__(self, training_file: pathlib.Path, confidence_level: float):
-        self.temperature = -1
-        self.training_file = training_file.as_posix()
+    def __init__(self, image: Image):
+        self.image = image
         self.dataPoints = HSVTree()
-        self.confidence_level = confidence_level
 
-    def train(self):
+    def train(self) -> np.array:
         """Loops through the directory with training data and collects samples and adds it to dataPoint"""
-        self.temperature = -1
-
-        if not os.path.isdir(self.training_file):
-            print("Image Root folder does not exist")
-            sys.exit(1)
 
         logging.info("[STARTING TRAINING]")
         start_time = time.perf_counter()
 
-        size = 0
-        for filename in os.listdir(self.training_file):
-            if not filename.endswith(".jpg"):
-                continue
+        logging.info(f"[TRAINING STARTING]")
+        hsv_image = self.image.convert("HSV")
+        data = np.array(hsv_image)
 
-            logging.info(f"Training with: {filename}")
-            image = Image.open(f"{self.training_file}/{filename}")
-            hsv_image = image.convert("HSV")
-            data = np.array(hsv_image)
-            w, h, z = data.shape
-            size = w * h
-
-            for i, line in enumerate(data):
-                # skip every other line for performance
-                if i % 6 != 0:
-                    continue
-
-                for j, pix in enumerate(line):
-                    if j % 6 != 0:
-                        continue
-
-                    self.dataPoints.add_sample(pix[0], pix[1], pix[2])
+        cluster_centers_ = self.find_clusters(data)
 
         end_time = time.perf_counter()
         logging.info("[DONE TRAINING]")
         logging.info(f"[TRAINING DONE IN]: {end_time - start_time} seconds")
+
+        return cluster_centers_
+
+    def find_clusters(self, image: np.array) -> np.array:
+        """Takes an array in the form of an np array and returns K cluster centers of the palette"""
+
+        self.dataPoints = HSVTree()
+        w, h, z = image.shape
+        size = w * h
+
+        for i, line in enumerate(image):
+            # skip every other line for performance
+            if i % 3 != 0:
+                continue
+
+            for j, pix in enumerate(line):
+                if j % 3 != 0:
+                    continue
+
+                self.dataPoints.add_sample(pix[0], pix[1], pix[2])
 
         self.dataPoints.updateHeap(size)
 
@@ -257,10 +252,11 @@ class Train:
         colours, _ = data_array.shape
         kmeans = KMeans(n_clusters=min(colours, COLOUR_PALETTE_SIZE))
         kmeans.fit(data_array)
-        generate_palette_image(kmeans.cluster_centers_)
+
+        return kmeans.cluster_centers_
 
 
-def generate_palette_image(palette_as_hsv: np.array):
+def generate_palette_image(palette_as_hsv: np.array, name):
     """
     Generates the image of the palette
     :param palette_as_hsv: np array containing hsv values of colours
@@ -284,7 +280,7 @@ def generate_palette_image(palette_as_hsv: np.array):
         # had to reverse RGB cause cv2 accepts BRG for some reason
         cv2.rectangle(palette_img, top_left, bottom_right, colour[::-1], -1)
 
-    cv2.imwrite("palette.png", palette_img)
+    cv2.imwrite(f"{name}.png", palette_img)
 
     logging.info("[DONE]")
 
@@ -293,11 +289,18 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Image Processor")
     p.add_argument('-f', dest="training_file", type=pathlib.Path, help="Location of directory containing training "
                                                                        "images", required=True)
-    p.add_argument('-c', dest="confidence", type=float, help="Minimum confidence level required to use a colour",
-                   default=1)
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO)
 
+    imagePath = pathlib.Path(args.training_file)
+
+    if not imagePath.exists() or imagePath.suffix != ".jpg":
+        print("ERROR: Invalid path or format")
+        sys.exit(1)
+
+    imageObj = Image.open(imagePath)
+
     logging.info("Beginning training")
-    t = Train(args.training_file, args.confidence)
-    t.train()
+    t = Train(imageObj)
+    cluster_centers = t.train()
+    generate_palette_image(cluster_centers, "palette")

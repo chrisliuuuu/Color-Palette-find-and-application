@@ -18,7 +18,6 @@ def get_closest(target_vec, vectors_array):
     closest_vec = None
 
     for vec in vectors_array:
-        print(vec)
         dist = euclidean(target_vec, vec)
         if dist < min_dist:
             closest_vec = vec
@@ -27,11 +26,11 @@ def get_closest(target_vec, vectors_array):
     return closest_vec, min_dist
 
 
-def reward(target_plt, output_plt):
+def getRewardFromPalettes(target_plt, output_plt):
     '''return the sum of distance between target color pallette and the output color pallette'''
     ''''Target_plt and output_plt must by a numpy array of arrays, and they must have in the same format'''
     dist_sum = 0
-    for target_color in target_plt():
+    for target_color in target_plt:
         cloest, min_dist = get_closest(target_color, output_plt)
         dist_sum += min_dist
     
