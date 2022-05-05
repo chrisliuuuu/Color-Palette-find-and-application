@@ -9,17 +9,22 @@
 # Student side autograding was added by Brad Miller, Nick Hay, and
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 # Modified by: Krishna Kothandaraman
-
+import argparse
+import logging
+import pathlib
 import random
+import sys
 from typing import List
 
+import cv2
 import numpy as np
 
 import action
 import mdp
-import Reward
+import reward
 from PIL import Image
 import featureExtractor
+import QlearningAgent
 
 TERMINAL_DISTANCE = 100
 
@@ -34,10 +39,10 @@ class ImageWorld(mdp.MarkovDecisionProcess):
       Image world
     """
 
-    def __init__(self, image: Image):
+    def __init__(self, image: Image, goalPalette):
         # target image and palette in this world that the agent wants to reach
         self.image = image
-        self.imagePalette = getPaletteFromImage(self.image)
+        self.goalPalette = goalPalette
 
         # parameters
         self.livingReward = 0.0
@@ -74,7 +79,7 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         # TODO: add terminal state
         return [nextAction for nextAction in action.ActionType]
 
-    def getReward(self, state, action: action.ActionType, nextState: np.array):
+    def getReward(self, state, action: action.ActionType, nextState: np.array) -> float:
         """
         Get reward for state, action, nextState transition.
         Note that the reward depends only on the state being
@@ -86,7 +91,7 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         # extract palette of new image
         nextPalette = getPaletteFromImage(nextImage)
         # get reward for new palette
-        return Reward.getRewardFromPalettes(self.imagePalette, nextPalette)
+        return -reward.getRewardFromPalettes(self.goalPalette, nextPalette)
 
     def isTerminal(self, nextImage: np.array):
         """
@@ -97,7 +102,7 @@ class ImageWorld(mdp.MarkovDecisionProcess):
         in the R+N textbook.
         """
         # Terminate if Euclidean distance is <= certain amount
-        return Reward.getRewardFromPalettes(self.imagePalette, getPaletteFromImage(nextImage)) <= TERMINAL_DISTANCE
+        return reward.getRewardFromPalettes(self.goalPalette, getPaletteFromImage(nextImage)) <= TERMINAL_DISTANCE
 
     def getTransitionStatesAndProbs(self, state: np.array, imgAction: action.ActionType):
         """
@@ -144,8 +149,11 @@ class WorldEnvironment:
                 return nextState, reward
         raise Exception('Total transition probability less than one; sample failure.')
 
+    def reset(self):
+        self.state = self.world.getStartState()
 
-def runEpisode(agent, environment, discount, decision, display, message, pause, episode):
+
+def runEpisode(agent, environment, discount, decision, message, episode):
     returns = 0
     totalDiscount = 1.0
     environment.reset()
@@ -155,8 +163,6 @@ def runEpisode(agent, environment, discount, decision, display, message, pause, 
 
         # DISPLAY CURRENT STATE
         state = environment.getCurrentState()
-        display(state)
-        pause()
 
         # END IF IN A TERMINAL STATE
         actions = environment.getPossibleActions(state)
@@ -166,7 +172,7 @@ def runEpisode(agent, environment, discount, decision, display, message, pause, 
 
         # GET ACTION (USUALLY FROM AGENT)
         action = decision(state)
-        if action == None:
+        if action is None:
             raise Exception('Error: Agent returned None action')
 
         # EXECUTE ACTION
@@ -181,3 +187,90 @@ def runEpisode(agent, environment, discount, decision, display, message, pause, 
 
         returns += reward * totalDiscount
         totalDiscount *= discount
+
+
+if __name__ == '__main__':
+    # get goal image file
+    p = argparse.ArgumentParser(description="Image Processor")
+    p.add_argument('-g', dest="goal_image", type=pathlib.Path, help="Path to goal image", required=True)
+    p.add_argument('-e', dest="edit_image", type=pathlib.Path, help="Path to image to edit", required=True)
+    p.add_argument('-d', '--discount', action='store',
+                   type=float, dest='discount', default=0.9,
+                   help='Discount on future (default %default)')
+    p.add_argument('-r', '--livingReward', action='store',
+                   type=float, dest='livingReward', default=0.0,
+                   metavar="R", help='Reward for living for a time step (default %default)')
+    p.add_argument('-n', '--noise', action='store',
+                   type=float, dest='noise', default=0.2,
+                   metavar="P", help='How often action results in ' +
+                                     'unintended direction (default %default)')
+    p.add_argument('--epsilon', action='store',
+                   type=float, dest='epsilon', default=0.3,
+                   metavar="E", help='Chance of taking a random action in q-learning (default %default)')
+    p.add_argument('-l', '--learningRate', action='store',
+                   type=float, dest='learningRate', default=0.5,
+                   metavar="P", help='TD learning rate (default %default)')
+    p.add_argument('-i', '--iterations', action='store',
+                   type=int, dest='iters', default=10,
+                   metavar="K", help='Number of rounds of value iteration (default %default)')
+    p.add_argument('-k', '--episodes', action='store',
+                   type=int, dest='episodes', default=1,
+                   metavar="K", help='Number of epsiodes of the MDP to run (default %default)')
+    args = p.parse_args()
+    logging.basicConfig(level=logging.INFO)
+
+    goalImagePath = pathlib.Path(args.goal_image)
+    editImagePath = pathlib.Path(args.goal_image)
+
+    if not goalImagePath.exists() or goalImagePath.suffix != ".jpg":
+        print("ERROR: Invalid goal Image path or format")
+        sys.exit(1)
+    if not editImagePath.exists() or editImagePath.suffix != ".jpg":
+        print("ERROR: Invalid edit Image path or format")
+        sys.exit(1)
+    # load images
+    goalImageObj = Image.open(goalImagePath)
+    editImageObj = Image.open(editImagePath)
+
+    logging.info("Beginning training")
+    # train feature extractor
+    t = featureExtractor.Train(goalImageObj)
+    # get palette of goal image
+    cluster_centers = t.train()
+    logging.info("Extracted features")
+
+    imgWorld = ImageWorld(editImageObj, cluster_centers)
+    env = WorldEnvironment(imgWorld)
+
+    ###########################
+    # GET THE AGENT
+    ###########################
+
+    # env.getPossibleActions, opts.discount, opts.learningRate, opts.epsilon
+    # simulationFn = lambda agent, state: simulation.GridworldSimulation(agent,state,mdp)
+    actionFn = lambda state: env.getPossibleActions(state)
+    qLearnOpts = {'gamma': args.discount,
+                  'alpha': args.learningRate,
+                  'epsilon': args.epsilon,
+                  'actionFn': actionFn}
+    a = QlearningAgent.QLearningAgent(**qLearnOpts)
+
+    message = lambda x: logging.info(x)
+    ###########################
+    # RUN EPISODES
+    ###########################
+    # DISPLAY Q/V VALUES BEFORE SIMULATION OF EPISODES
+
+    # RUN EPISODES
+    if args.episodes > 0:
+        print()
+        print("RUNNING", args.episodes, "EPISODES")
+        print()
+    returns = 0
+    for episode in range(1, args.episodes + 1):
+        returns += runEpisode(a, env, args.discount, a.getAction, message, episode)
+    if args.episodes > 0:
+        print(f"\nAVERAGE RETURNS FROM START STATE: {str((returns + 0.0) / args.episodes)}\n\n")
+
+    print("Iterations over, saving image as edited.jpg")
+    # TODO: save final edited image

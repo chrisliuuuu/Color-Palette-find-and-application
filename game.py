@@ -12,18 +12,10 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 # Modified by Krishna Kothandaraman
 
-
-import pathlib
 from typing import List
-
 import numpy as np
-from PIL import Image
-from featureExtractor import Train, HSVTree
-import Reward
-
 import action
 from util import *
-import cv2
 
 
 #######################
@@ -107,22 +99,3 @@ class Actions:
 
     getSuccessor = staticmethod(getSuccessor)
 
-
-if __name__ == "__main__":
-    # testing
-    image1 = Image.open('sample-image/temp/blue.jpg')
-    t1 = Train(pathlib.Path('sample-image/temp'))
-    plt_1 = t1.train()
-    edit_img = Image.open('sample-image/res/light_blue.jpg')
-    data = np.array(edit_img)
-
-    possible_actions = Actions.getPossibleActions()
-    print(possible_actions)
-    for next_action in possible_actions:
-        image = Actions.getSuccessor(data, next_action)
-        displayImage = Image.fromarray(image)
-        t1.dataPoints = HSVTree()
-        # extract feature of new image
-        plt_2 = t1.find_clusters(image)
-        print(f"Reward after {next_action}: {Reward.reward(plt_1, plt_2)}")
-        cv2.imwrite(f"res_{str(next_action.value)}.jpg", image)
